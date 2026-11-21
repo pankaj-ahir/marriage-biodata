@@ -1,4 +1,4 @@
-import { resolveGodSrc, isGodVisible } from "@/lib/godImages";
+import { resolveGodSrc, isGodVisible } from "./godImages";
 
 /**
  * Template-aware PDF:
