@@ -1,0 +1,110 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { isHandMade, templateImageSrc } from "@/lib/templates";
+import TemplateCategoryTabs, { templatesForTab, tabButtonId, type TemplateTab } from "./TemplateCategoryTabs";
+import Pagination, { usePagination } from "./Pagination";
+import { cn } from "@/lib/utils";
+
+export default function TemplateSelector({
+  selectedId,
+  onSelect,
+}: {
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  const [tab, setTab] = useState<TemplateTab>("all");
+  const all = templatesForTab(tab);
+  const pager = usePagination(all);
+  const topRef = useRef<HTMLDivElement>(null);
+
+  const changeTab = (next: TemplateTab) => {
+    setTab(next);
+    pager.reset();
+  };
+  const goToPage = (p: number) => {
+    pager.setPage(p);
+    requestAnimationFrame(() => topRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+  };
+
+  return (
+    <div className="space-y-5 rounded-2xl border-2 border-[#e8d5a3] bg-gradient-to-b from-[#fffbf0] to-white p-4 shadow-sm sm:p-6">
+      <div className="text-center sm:text-left">
+        <p className="text-xs font-bold uppercase tracking-wider text-[#7a5c14]">
+          Final step
+        </p>
+        <h3 className="mt-1 text-lg font-bold text-stone-900 sm:text-xl">
+          Choose Your Perfect Template
+        </h3>
+        <p className="mt-1 text-sm text-stone-500">
+          Form details are saved — pick a design below, then preview your biodata.
+        </p>
+      </div>
+
+      <div ref={topRef} className="scroll-mt-20" />
+      <TemplateCategoryTabs value={tab} onChange={changeTab} idPrefix="sel" panelId="sel-panel" />
+
+      <div
+        id="sel-panel"
+        role="tabpanel"
+        aria-labelledby={tabButtonId("sel", tab)}
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      >
+        {pager.pageItems.map((tpl) => {
+          const active = selectedId === tpl.id;
+          return (
+            <button
+              key={tpl.id}
+              type="button"
+              onClick={() => onSelect(tpl.id)}
+              className={cn(
+                "group relative overflow-hidden rounded-2xl border-2 bg-white text-left transition touch-manipulation",
+                active
+                  ? "border-[#c4a35a] shadow-lg ring-2 ring-[#c4a35a]/35"
+                  : "border-stone-200 hover:border-[#c4a35a]/50 hover:shadow-md"
+              )}
+            >
+              <div className="relative aspect-[3/4] w-full overflow-hidden bg-[#f5f0e8]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={templateImageSrc(tpl.id)}
+                  alt={`${tpl.name} template`}
+                  width={600}
+                  height={848}
+                  className="h-full max-h-full w-full object-contain object-center"
+                  loading="lazy"
+                  decoding="async"
+                />
+                {active && (
+                  <span className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-[#7a5c14] text-sm font-bold text-white shadow-md">
+                    ✓
+                  </span>
+                )}
+                {isHandMade(tpl.id) && tpl.id !== "elegant-profile" && (
+                  <span className="absolute left-2.5 top-2.5 rounded-md bg-stone-900/80 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-200">
+                    Premium
+                  </span>
+                )}
+              </div>
+              <div className="border-t border-stone-100 px-3 py-2.5">
+                <p className="text-sm font-bold text-stone-900">{tpl.name}</p>
+                {tpl.description && (
+                  <p className="mt-0.5 line-clamp-2 text-[11px] text-stone-500">
+                    {tpl.description}
+                  </p>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <Pagination
+        page={pager.page}
+        totalPages={pager.totalPages}
+        total={all.length}
+        onChange={goToPage}
+        controls="sel-panel"
+      />
+    </div>
+  );
+}
