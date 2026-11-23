@@ -32,6 +32,10 @@ export interface FormFieldRow {
   placeholder?: string;
   required?: boolean;
   section: "personal" | "family" | "contact";
+  /** Original (Roman) text typed by the user, kept so a language switch converts from the source, not from a previous conversion */
+  latin?: string;
+  /** The converted value that was produced from `latin` (if value still equals this, `latin` is the true source) */
+  latinOut?: string;
 }
 
 export interface BiodataFormData {

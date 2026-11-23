@@ -220,7 +220,7 @@ function FieldRow({
   includeText?: string;
   selectText?: string;
   language?: Language;
-  onTranslateValue?: (id: string, value: string) => void;
+  onTranslateValue?: (id: string, value: string, src?: string) => void;
 }) {
   const [editingLabel, setEditingLabel] = useState(false);
 
@@ -239,12 +239,12 @@ function FieldRow({
     if (!v) return;
     const known = translateKnown(v, language);
     if (known) {
-      if (known !== v) onTranslateValue(field.id, known);
+      if (known !== v) onTranslateValue(field.id, known, v);
       return;
     }
     if (!hasLatinWords(v)) return;
     const converted = await transliterate(v, language);
-    if (converted && valueRef.current?.trim() === v) onTranslateValue(field.id, converted);
+    if (converted && valueRef.current?.trim() === v) onTranslateValue(field.id, converted, v);
   };
 
   const btnIcon =
@@ -532,12 +532,18 @@ export default function BiodataForm() {
 
   /** Apply translated labels + placeholders when language changes */
   const applyLangToFields = useCallback((list: FormFieldRow[], language: Language) => {
+    const ALL_LANGS: Language[] = ["en", "mr", "hi", "gu", "te", "bn"];
     return list.map((f) => {
       const translated = fieldLabel(language, f.key);
       const ph = fieldPlaceholder(language, f.key);
+      let label = translated && translated !== f.key ? translated : f.label;
+      // Untouched custom field ("New Field") follows the selected language too
+      if (f.key.startsWith("custom-") && ALL_LANGS.some((l) => t(l, "newField") === f.label)) {
+        label = t(language, "newField");
+      }
       return {
         ...f,
-        label: translated && translated !== f.key ? translated : f.label,
+        label,
         placeholder: f.key === "dob" || f.key === "gender" ? f.placeholder : ph,
         // Display labels in language; values stay male/female via FieldRow
         options:
@@ -548,14 +554,27 @@ export default function BiodataForm() {
     });
   }, []);
 
+  /** True source text of a row: the original Roman text if the value is still our own conversion. */
+  const sourceOf = (f: FormFieldRow) =>
+    f.latin && f.value === f.latinOut ? f.latin : f.value || "";
+
   /** Re-label fields and convert well-known answers; typed names/places are never touched. */
   const convertFields = useCallback(
     (list: FormFieldRow[], to: Language) =>
       list.map((f) => {
         const labeled = applyLangToFields([f], to)[0];
         if (SKIP_TRANSLATE_KEYS.has(f.key) || f.type === "date" || f.type === "select") return labeled;
-        const converted = translateKnown(f.value || "", to);
-        return converted ? { ...labeled, value: converted } : labeled;
+        const src = sourceOf(f);
+        if (to === "en") {
+          // Back to English: restore what the user originally typed
+          if (src !== f.value) return { ...labeled, value: src, latin: undefined, latinOut: undefined };
+          const converted = translateKnown(src, to);
+          return converted ? { ...labeled, value: converted } : labeled;
+        }
+        const converted = translateKnown(src, to);
+        return converted
+          ? { ...labeled, value: converted, latin: src, latinOut: converted }
+          : labeled;
       }),
     [applyLangToFields]
   );
@@ -566,12 +585,18 @@ export default function BiodataForm() {
       if (fromLang === next) return;
 
       // Values that the dictionary cannot convert are converted by sound (names, places ...)
-      const pending: { id: string; value: string }[] = [];
+      const pending: { id: string; src: string; current: string }[] = [];
       if (next !== "en") {
         for (const f of [...personalFields, ...familyFields, ...contactFields]) {
-          const v = (f.value || "").trim();
-          if (!v || SKIP_TRANSLATE_KEYS.has(f.key) || f.type === "date" || f.type === "select") continue;
-          if (!translateKnown(v, next) && hasLatinWords(v)) pending.push({ id: f.id, value: v });
+          if (SKIP_TRANSLATE_KEYS.has(f.key) || f.type === "date" || f.type === "select") continue;
+          const src = sourceOf(f).trim();
+          if (!src) continue;
+          if (!translateKnown(src, next) && hasLatinWords(src)) {
+            pending.push({ id: f.id, src, current: f.value });
+          } else if (!translateKnown(src, next) && f.latin) {
+            // already converted earlier from Roman text: re-convert from the source
+            pending.push({ id: f.id, src: f.latin, current: f.value });
+          }
         }
       }
 
@@ -579,11 +604,15 @@ export default function BiodataForm() {
       setFamilyFields((prev) => convertFields(prev, next));
       setContactFields((prev) => convertFields(prev, next));
 
-      for (const { id, value } of pending) {
-        void transliterate(value, next).then((out) => {
+      for (const { id, src, current } of pending) {
+        void transliterate(src, next).then((out) => {
           if (!out) return;
           const apply = (list: FormFieldRow[]) =>
-            list.map((f) => (f.id === id && (f.value || "").trim() === value ? { ...f, value: out } : f));
+            list.map((f) =>
+              f.id === id && f.value === current
+                ? { ...f, value: out, latin: src, latinOut: out }
+                : f
+            );
           setPersonalFields(apply);
           setFamilyFields(apply);
           setContactFields(apply);
@@ -748,18 +777,38 @@ export default function BiodataForm() {
     setFieldsForStep(section, [...list, row]);
   };
 
+  /** Restore a default field (e.g. Religion, Caste) that the user removed earlier. */
+  const restoreDefault = (section: FormFieldRow["section"], key: string) => {
+    const defaults =
+      section === "personal" ? defaultPersonalFields() : section === "family" ? defaultFamilyFields() : defaultContactFields();
+    const base = defaults.find((f) => f.key === key);
+    if (!base) return;
+    if (getFields(section).some((f) => f.key === key)) return;
+    const [row] = applyLangToFields([base], lang);
+    setFieldsForStep(section, [...getFields(section), row]);
+  };
+
   const addChip = (chip: (typeof OPTIONAL_CHIPS)[number]) => {
-    // Map known keys to data fields + personal section
-    const knownMap: Record<string, keyof BiodataFormData> = {
-      rashi: "rashi",
-      nakshatra: "nakshatra",
-      manglik: "manglik",
-      gotra: "gotra",
-    };
     addField("personal", { key: chip.key, label: chip.label });
-    if (knownMap[chip.key]) {
-      // ensure data key exists
-    }
+  };
+
+  /** Wipe the draft: fields, answers, photos and the saved session. */
+  const resetAll = () => {
+    if (typeof window !== "undefined" && !window.confirm(t(lang, "clearAllConfirm"))) return;
+    clearSession();
+    const keep = { language: data.language, templateId: data.templateId };
+    setData({
+      ...initialData,
+      ...keep,
+      biodataTitle: t(keep.language as Language, "defaultTitle") || initialData.biodataTitle,
+      mantra: t(keep.language as Language, "defaultMantra") || initialData.mantra,
+    });
+    setPersonalFields(applyLangToFields(defaultPersonalFields(), keep.language as Language));
+    setFamilyFields(applyLangToFields(defaultFamilyFields(), keep.language as Language));
+    setContactFields(applyLangToFields(defaultContactFields(), keep.language as Language));
+    setStep(0);
+    setShowPreview(false);
+    setError("");
   };
 
   const buildDataFromFields = useCallback((): BiodataFormData => {
@@ -902,6 +951,12 @@ export default function BiodataForm() {
   const currentFields = getFields(currentSection);
 
   const usedChipKeys = new Set(personalFields.map((f) => f.key));
+  const removedDefaults = (() => {
+    const defaults =
+      currentSection === "personal" ? defaultPersonalFields() : currentSection === "family" ? defaultFamilyFields() : defaultContactFields();
+    const have = new Set(currentFields.map((f) => f.key));
+    return defaults.filter((d) => !have.has(d.key));
+  })();
 
   const previewData = useMemo(() => {
     if (!showPreview) return data;
@@ -930,6 +985,13 @@ export default function BiodataForm() {
               {i + 1}. {t(lang, key)}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={resetAll}
+            className="rounded-full border border-red-200 bg-white px-4 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+          >
+            {t(lang, "clearAll")}
+          </button>
         </div>
       )}
 
@@ -1045,21 +1107,27 @@ export default function BiodataForm() {
                       </div>
                     ))}
                     {((data.photoDataUrls || (data.photoDataUrl ? [data.photoDataUrl] : [])).length < 3) && (
-                      <div className="flex h-24 w-20 items-center justify-center rounded-xl border-2 border-dashed border-[#d6cfc4] bg-white/70">
-                        <span className="text-2xl text-stone-300">+</span>
-                      </div>
-                    )}
-                    <div className="min-w-[180px] flex-1">
-                      <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhoto} />
                       <button
                         type="button"
+                        aria-label="Add photo"
                         onClick={() => fileRef.current?.click()}
-                        disabled={(data.photoDataUrls || (data.photoDataUrl ? [data.photoDataUrl] : [])).length >= 3}
-                        className="rounded-lg bg-[#7a5c14] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1c1917] disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex h-24 w-20 items-center justify-center rounded-xl border-2 border-dashed border-[#c4a35a] bg-white/70 transition hover:bg-[#faf6eb] active:scale-95"
                       >
-                        {t(lang, "upload")} photos
+                        <span className="text-2xl text-[#7a5c14]">+</span>
                       </button>
-                      <p className="mt-1 text-xs text-stone-500">Add up to 3 photos. The first/Primary photo is used in the main photo position.</p>
+                    )}
+                    <div className="mt-3 min-w-[180px] flex-1">
+                      <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhoto} />
+                      {(data.photoDataUrls || (data.photoDataUrl ? [data.photoDataUrl] : [])).length < 3 && (
+                        <button
+                          type="button"
+                          onClick={() => fileRef.current?.click()}
+                          className="rounded-lg bg-[#7a5c14] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1c1917]"
+                        >
+                          Add photo
+                        </button>
+                      )}
+                      <p className="mt-1 text-xs text-stone-500">{(data.photoDataUrls || (data.photoDataUrl ? [data.photoDataUrl] : [])).length < 3 ? "Add up to 3 photos. " : "3 photos added. "} The first/Primary photo is used in the main photo position.</p>
                     </div>
                     <div className="min-w-[180px] flex-1 rounded-lg border border-[#e7e5e4] bg-white/80 p-3 text-xs text-stone-600">
                       <p className="mb-1 font-semibold text-stone-700">{t(lang, "photoTips")}</p>
@@ -1117,40 +1185,51 @@ export default function BiodataForm() {
                       includeText={t(lang, "include")}
                       selectText={t(lang, "select")}
                       language={lang}
-                      onTranslateValue={(id, value) =>
-                        onFieldChange(currentSection, id, { value })
+                      onTranslateValue={(id, value, src) =>
+                        onFieldChange(currentSection, id, { value, latin: src, latinOut: value })
                       }
                     />
                   </div>
                 ))}
               </div>
 
-              {/* Optional chips — only on personal step */}
-              {step === 0 && (
+              {/* Removed default fields can always be brought back; optional chips only on personal step */}
+              {(removedDefaults.length > 0 || step === 0) && (
                 <div className="mt-5 rounded-xl border border-[#e7e5e4] bg-[#faf6eb]/30 p-4">
                   <p className="mb-3 text-sm font-medium text-stone-600">
                     {t(lang, "addMore")}
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    {OPTIONAL_CHIPS.map((chip) => {
-                      const added = usedChipKeys.has(chip.key);
-                      return (
-                        <button
-                          key={chip.key}
-                          type="button"
-                          disabled={added}
-                          onClick={() => addChip(chip)}
-                          className={cn(
-                            "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
-                            added
-                              ? "border-stone-200 bg-stone-100 text-stone-400"
-                              : "border-[#c4a35a] bg-white text-[#7a5c14] hover:bg-[#faf6eb]"
-                          )}
-                        >
-                          + {fieldLabel(lang, chip.key)}
-                        </button>
-                      );
-                    })}
+                    {removedDefaults.map((d) => (
+                      <button
+                        key={`restore-${d.key}`}
+                        type="button"
+                        onClick={() => restoreDefault(currentSection, d.key)}
+                        className="rounded-full border border-[#c4a35a] bg-white px-3 py-1.5 text-xs font-semibold text-[#7a5c14] transition hover:bg-[#faf6eb]"
+                      >
+                        + {fieldLabel(lang, d.key) !== d.key ? fieldLabel(lang, d.key) : d.label}
+                      </button>
+                    ))}
+                    {step === 0 &&
+                      OPTIONAL_CHIPS.filter((chip) => !removedDefaults.some((d) => d.key === chip.key)).map((chip) => {
+                        const added = usedChipKeys.has(chip.key);
+                        return (
+                          <button
+                            key={chip.key}
+                            type="button"
+                            disabled={added}
+                            onClick={() => addChip(chip)}
+                            className={cn(
+                              "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                              added
+                                ? "border-stone-200 bg-stone-100 text-stone-400"
+                                : "border-[#c4a35a] bg-white text-[#7a5c14] hover:bg-[#faf6eb]"
+                            )}
+                          >
+                            + {fieldLabel(lang, chip.key)}
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
               )}
