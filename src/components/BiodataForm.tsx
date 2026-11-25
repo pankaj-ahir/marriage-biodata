@@ -2,7 +2,6 @@
 
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { BiodataFormData, FormFieldRow, Language } from "@/lib/types";
-import TemplateSelector from "./TemplateSelector";
 import TemplateCarousel from "./TemplateCarousel";
 import BiodataPreview from "./BiodataPreview";
 import PreviewProtection from "./PreviewProtection";
@@ -46,6 +45,21 @@ const OPTIONAL_CHIPS = [
 const fieldClass =
   "w-full min-h-[44px] max-w-full rounded-xl border border-[#e8e0d4] bg-white px-3 py-2.5 text-base text-[#1c1917] shadow-[0_1px_2px_rgba(28,25,23,0.04)] outline-none transition placeholder:text-[#78716c] focus:border-[#c4a35a] focus:shadow-[0_0_0_3px_rgba(196,163,90,0.18)] sm:min-h-[42px] sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm touch-manipulation appearance-none";
 
+
+/** Allowed characters per field. Letters = any script (Gujarati, Hindi ...), so names never break. */
+const DIGIT_KEYS = new Set(["phone", "whatsapp"]);
+const LETTER_KEYS = new Set([
+  "fullName", "fatherName", "motherName", "fatherOccupation", "motherOccupation", "occupation",
+  "religion", "caste", "gotra", "rashi", "nakshatra", "manglik", "gana", "diet", "complexion",
+  "maritalStatus", "disability", "nativePlace", "nativePlaceExtra",
+]);
+function sanitizeValue(key: string, v: string): string {
+  if (DIGIT_KEYS.has(key)) return v.replace(/[^0-9+\s-]/g, "").slice(0, 16);
+  if (key === "email") return v.replace(/\s/g, "").slice(0, 80);
+  if (LETTER_KEYS.has(key)) return v.replace(/[^\p{L}\p{M}\s.,'’&()\/-]/gu, "");
+  return v;
+}
+
 const SESSION_KEY = "fbm-biodata-session-v1";
 
 type SessionSnapshot = {
@@ -63,7 +77,7 @@ function loadSession(): SessionSnapshot | null {
   if (typeof window === "undefined") return null;
   // sessionStorage first, localStorage as backup (mobile browsers often discard
   // the tab/session when you take a screenshot, switch apps or low memory)
-  for (const store of [() => sessionStorage, () => localStorage]) {
+  for (const store of [() => sessionStorage]) {
     try {
       const raw = store().getItem(SESSION_KEY);
       if (!raw) continue;
@@ -92,22 +106,6 @@ function saveSession(snap: SessionSnapshot) {
   } catch {
     /* quota / private mode */
   }
-  try {
-    localStorage.setItem(SESSION_KEY, json);
-  } catch {
-    /* quota / private mode */
-  }
-}
-
-function clearSession() {
-  if (typeof window === "undefined") return;
-  try {
-    sessionStorage.removeItem(SESSION_KEY);
-    localStorage.removeItem(SESSION_KEY);
-  } catch {
-    /* ignore */
-  }
-  void clearPhotos();
 }
 
 function makeId() {
@@ -328,7 +326,7 @@ function FieldRow({
               aria-label={field.label}
               className={cn(fieldClass, "min-h-[80px] resize-y")}
               value={field.value}
-              onChange={(e) => onChange(field.id, { value: e.target.value })}
+              onChange={(e) => onChange(field.id, { value: sanitizeValue(field.key, e.target.value) })}
               onBlur={() => void tryAutoTranslate()}
               placeholder={field.placeholder}
               rows={3}
@@ -336,7 +334,9 @@ function FieldRow({
           ) : (
             <input
               aria-label={field.label}
-              type={field.type === "date" ? "date" : "text"}
+              type={field.type === "date" ? "date" : field.key === "email" ? "email" : DIGIT_KEYS.has(field.key) ? "tel" : "text"}
+              inputMode={DIGIT_KEYS.has(field.key) ? "numeric" : field.key === "email" ? "email" : undefined}
+              maxLength={DIGIT_KEYS.has(field.key) ? 16 : undefined}
               className={cn(
                 fieldClass,
                 field.type === "date" &&
@@ -344,7 +344,7 @@ function FieldRow({
               )}
               value={field.value}
               data-field-key={field.key}
-              onChange={(e) => onChange(field.id, { value: e.target.value })}
+              onChange={(e) => onChange(field.id, { value: field.type === "date" ? e.target.value : sanitizeValue(field.key, e.target.value) })}
               onBlur={() => void tryAutoTranslate()}
               placeholder={field.placeholder}
               autoComplete={field.key === "fullName" ? "name" : "off"}
@@ -411,6 +411,18 @@ export default function BiodataForm() {
   const [hydrated, setHydrated] = useState(false);
   const [photosReady, setPhotosReady] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+
+  /** After Next/Back: show the start of THIS form (step tabs), not the top of the whole page. */
+  const scrollToFormTop = () => {
+    window.setTimeout(() => {
+      try {
+        topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch {
+        /* ignore */
+      }
+    }, 60);
+  };
 
   // Client hydrate (avoid SSR mismatch)
   useEffect(() => {
@@ -438,15 +450,35 @@ export default function BiodataForm() {
         setData((prev) => ({ ...prev, templateId: preferred! }));
       }
       if (typeof s.step === "number") setStep(s.step);
-      if (s.personalFields?.length) setPersonalFields(s.personalFields);
-      if (s.familyFields?.length) setFamilyFields(s.familyFields);
-      if (s.contactFields?.length) setContactFields(s.contactFields);
-      if (typeof s.showPreview === "boolean") setShowPreview(s.showPreview);
+      // Removing a field only lasts for the current visit: after a reload every default field is back
+      const withDefaults = (saved: FormFieldRow[] | undefined, defaults: FormFieldRow[]) => {
+        const list = saved?.length ? [...saved] : [];
+        const have = new Set(list.map((f) => f.key));
+        for (const d of defaults) if (!have.has(d.key)) list.push(d);
+        return list;
+      };
+      setPersonalFields(withDefaults(s.personalFields, defaultPersonalFields()));
+      setFamilyFields(withDefaults(s.familyFields, defaultFamilyFields()));
+      setContactFields(withDefaults(s.contactFields, defaultContactFields()));
+      // A template picked on /templates opens the form (not a stale preview of the old design)
+      const pickedNew = !!preferred && preferred !== s.data?.templateId;
+      if (typeof s.showPreview === "boolean") setShowPreview(pickedNew ? false : s.showPreview);
     } else if (preferred) {
       setData((prev) => ({ ...prev, templateId: preferred! }));
     }
     setHydrated(true);
-    // Restore photos (stored separately in IndexedDB)
+    // Old versions kept a copy of the draft in localStorage -> never reuse it in a new tab
+    try {
+      localStorage.removeItem(SESSION_KEY);
+    } catch {
+      /* ignore */
+    }
+    if (!s) {
+      // Brand-new tab / visit: no previous data, no previous photos
+      void clearPhotos().finally(() => setPhotosReady(true));
+      return;
+    }
+    // Same tab (reload / app switch): restore photos (stored separately in IndexedDB)
     void loadPhotos().then((photos) => {
       if (photos.length) {
         setData((prev) =>
@@ -792,25 +824,6 @@ export default function BiodataForm() {
     addField("personal", { key: chip.key, label: chip.label });
   };
 
-  /** Wipe the draft: fields, answers, photos and the saved session. */
-  const resetAll = () => {
-    if (typeof window !== "undefined" && !window.confirm(t(lang, "clearAllConfirm"))) return;
-    clearSession();
-    const keep = { language: data.language, templateId: data.templateId };
-    setData({
-      ...initialData,
-      ...keep,
-      biodataTitle: t(keep.language as Language, "defaultTitle") || initialData.biodataTitle,
-      mantra: t(keep.language as Language, "defaultMantra") || initialData.mantra,
-    });
-    setPersonalFields(applyLangToFields(defaultPersonalFields(), keep.language as Language));
-    setFamilyFields(applyLangToFields(defaultFamilyFields(), keep.language as Language));
-    setContactFields(applyLangToFields(defaultContactFields(), keep.language as Language));
-    setStep(0);
-    setShowPreview(false);
-    setError("");
-  };
-
   const buildDataFromFields = useCallback((): BiodataFormData => {
     const all = [...personalFields, ...familyFields, ...contactFields];
     const next: BiodataFormData = { ...data };
@@ -882,6 +895,20 @@ export default function BiodataForm() {
       return;
     }
 
+    // Format checks
+    const phoneRow = sectionFields.find((f) => f.key === "phone" && f.include);
+    if (phoneRow && phoneRow.value.replace(/\D/g, "").length < 10) {
+      setError("Mobile number must have at least 10 digits.");
+      document.querySelector<HTMLInputElement>('[data-field-key="phone"]')?.focus();
+      return;
+    }
+    const emailRow = sectionFields.find((f) => f.key === "email" && f.include);
+    if (emailRow && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailRow.value.trim())) {
+      setError("Please enter a valid email address.");
+      document.querySelector<HTMLInputElement>('[data-field-key="email"]')?.focus();
+      return;
+    }
+
     // Sync full name into data
     if (step === 0) {
       const name =
@@ -895,23 +922,23 @@ export default function BiodataForm() {
 
     if (step < 2) {
       setStep(step + 1);
-      // Scroll to top of form on step change
-      try {
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      } catch {
-        /* ignore */
-      }
+      scrollToFormTop();
       return;
     }
     setShowPreview(true);
+    scrollToFormTop();
   };
 
   const prev = () => {
     if (showPreview) {
       setShowPreview(false);
+      scrollToFormTop();
       return;
     }
-    if (step > 0) setStep(step - 1);
+    if (step > 0) {
+      setStep(step - 1);
+      scrollToFormTop();
+    }
   };
 
   const downloadPdf = async () => {
@@ -965,7 +992,7 @@ export default function BiodataForm() {
   }, [showPreview, data, buildDataFromFields]);
 
   return (
-    <div className="mx-auto w-full max-w-5xl min-w-0 px-0 overflow-x-hidden">
+    <div ref={topRef} className="mx-auto w-full max-w-5xl min-w-0 scroll-mt-16 px-0 overflow-x-hidden">
       {!showPreview && (
         <div className="mb-6 flex flex-wrap items-center justify-center gap-2 sm:mb-8">
           {STEP_KEYS.map((key, i) => (
@@ -985,13 +1012,6 @@ export default function BiodataForm() {
               {i + 1}. {t(lang, key)}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={resetAll}
-            className="rounded-full border border-red-200 bg-white px-4 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-          >
-            {t(lang, "clearAll")}
-          </button>
         </div>
       )}
 
@@ -1244,45 +1264,6 @@ export default function BiodataForm() {
                 {t(lang, "addField")}
               </button>
             </div>
-
-            {step === 2 && (
-              <div id="form-template-pick" className="mt-8 scroll-mt-24">
-                <TemplateSelector
-                  selectedId={data.templateId}
-                  onSelect={(id) => {
-                    try {
-                      sessionStorage.setItem("fbm-preferred-template", id);
-                    } catch {
-                      /* ignore */
-                    }
-
-                    // Validate contact fields before opening preview
-                    const missing = contactFields.filter(
-                      (f) => f.include && !(f.value || "").trim()
-                    );
-                    if (missing.length > 0) {
-                      update("templateId", id);
-                      const names = missing.map((f) => f.label).slice(0, 4).join(", ");
-                      setError(
-                        `Template selected. Please fill: ${names} — then Preview.`
-                      );
-                      return;
-                    }
-
-                    // Apply selected template + open preview with that design
-                    const built = { ...buildDataFromFields(), templateId: id };
-                    setData(built);
-                    setError("");
-                    setShowPreview(true);
-                    try {
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    } catch {
-                      /* ignore */
-                    }
-                  }}
-                />
-              </div>
-            )}
 
             {error && (
               <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>

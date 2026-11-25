@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { isHandMade, templateImageSrc } from "@/lib/templates";
 import TemplateCategoryTabs, { templatesForTab, tabButtonId, type TemplateTab } from "./TemplateCategoryTabs";
 import Pagination, { usePagination } from "./Pagination";
@@ -8,10 +9,37 @@ import Pagination, { usePagination } from "./Pagination";
 export const PREFERRED_TEMPLATE_KEY = "fbm-preferred-template";
 export const TEMPLATE_SELECT_EVENT = "fbm-template-select";
 
-export default function TemplateGallery() {
+export default function TemplateGallery({
+  target = "#create",
+  paginate = true,
+  limit,
+}: {
+  /** Show only the first N templates (no tabs, no pager) — used on the home page */
+  limit?: number;
+  /** Where a click goes after the template is saved (home form: "#create", templates page: "/#create") */
+  target?: string;
+  /** false = show every template of the tab on one page (no pager) */
+  paginate?: boolean;
+}) {
   const [tab, setTab] = useState<TemplateTab>("all");
-  const all = templatesForTab(tab);
-  const pager = usePagination(all);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const all = limit ? templatesForTab("all").slice(0, limit) : templatesForTab(tab);
+  const pager = usePagination(all, paginate ? undefined : Math.max(all.length, 1));
+
+  // Remember which design was picked (also when coming back to this page)
+  useEffect(() => {
+    try {
+      setSelectedId(sessionStorage.getItem(PREFERRED_TEMPLATE_KEY));
+    } catch {
+      /* ignore */
+    }
+    const onPick = (e: Event) => {
+      const id = (e as CustomEvent<{ templateId?: string }>).detail?.templateId;
+      if (id) setSelectedId(id);
+    };
+    window.addEventListener(TEMPLATE_SELECT_EVENT, onPick as EventListener);
+    return () => window.removeEventListener(TEMPLATE_SELECT_EVENT, onPick as EventListener);
+  }, []);
   const topRef = useRef<HTMLDivElement>(null);
 
   const changeTab = (next: TemplateTab) => {
@@ -25,6 +53,7 @@ export default function TemplateGallery() {
   };
 
   const pick = (id: string) => {
+    setSelectedId(id);
     try {
       sessionStorage.setItem(PREFERRED_TEMPLATE_KEY, id);
     } catch {
@@ -42,9 +71,11 @@ export default function TemplateGallery() {
 
   return (
     <div className="mt-8">
-      <div className="-mx-3 px-3 sm:mx-0 sm:px-0">
-        <TemplateCategoryTabs value={tab} onChange={changeTab} idPrefix="tpl" panelId="tpl-panel" centered />
-      </div>
+      {!limit && (
+        <div className="-mx-3 px-3 sm:mx-0 sm:px-0">
+          <TemplateCategoryTabs value={tab} onChange={changeTab} idPrefix="tpl" panelId="tpl-panel" centered />
+        </div>
+      )}
 
       <div ref={topRef} className="scroll-mt-24" />
       <div
@@ -54,11 +85,14 @@ export default function TemplateGallery() {
         className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"
       >
       {pager.pageItems.map((t) => (
-        <a
+        <Link
           key={t.id}
-          href="#create"
+          href={target}
           onClick={() => pick(t.id)}
-          className="group relative flex flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-md transition hover:-translate-y-0.5 hover:border-[#c4a35a] hover:shadow-xl"
+          aria-current={selectedId === t.id ? "true" : undefined}
+          className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white shadow-md transition hover:-translate-y-0.5 hover:border-[#c4a35a] hover:shadow-xl ${
+            selectedId === t.id ? "border-[#c4a35a] ring-2 ring-[#c4a35a]" : "border-stone-200"
+          }`}
         >
           <div className="relative aspect-[3/4] w-full overflow-hidden bg-gradient-to-b from-[#faf6eb] to-[#f0ebe3]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -71,6 +105,11 @@ export default function TemplateGallery() {
               loading="lazy"
               decoding="async"
             />
+            {selectedId === t.id && (
+              <span className="absolute left-3 top-3 z-10 rounded-md bg-[#c4a35a] px-2.5 py-1 text-[11px] font-bold text-[#1c1917] shadow">
+                ✓ Selected
+              </span>
+            )}
             {isHandMade(t.id) &&
               (t.id === "elegant-profile" ? (
                 <span className="absolute right-3 top-3 rounded-md bg-[#7a5c14] px-2.5 py-1 text-[11px] font-bold text-white shadow">
@@ -93,9 +132,10 @@ export default function TemplateGallery() {
               <p className="mt-1 line-clamp-2 text-xs text-stone-500">{t.description}</p>
             )}
           </div>
-        </a>
+        </Link>
       ))}
       </div>
+      {paginate && !limit && (
       <Pagination
         page={pager.page}
         totalPages={pager.totalPages}
@@ -103,6 +143,7 @@ export default function TemplateGallery() {
         onChange={goToPage}
         controls="tpl-panel"
       />
+      )}
     </div>
   );
 }

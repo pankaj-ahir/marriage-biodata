@@ -1,6 +1,7 @@
 import Header from "@/components/Header";
 import BiodataForm from "@/components/BiodataForm";
 import TemplateGallery from "@/components/TemplateGallery";
+import { TEMPLATES } from "@/lib/templates";
 import {
   SITE_URL,
   SITE_NAME,
@@ -200,7 +201,6 @@ export default function Home() {
             </div>
             <div className="mt-6 flex flex-wrap gap-4 text-sm text-white/70">
               <span>● 191,800+ Biodatas Created</span>
-              <span>● 100% Free Basic Templates</span>
             </div>
           </div>
 
@@ -349,16 +349,16 @@ export default function Home() {
               Choose Your Perfect Template
             </h2>
             <p className="mt-3 text-sm text-[#78716c] sm:text-base">
-              Browse full designs below. Click any template to start the form — you can change it again at the bottom after filling your details.
+              Browse full designs below. Click any template to start the form — you can change it again from the preview.
             </p>
           </div>
-          <TemplateGallery />
+          <TemplateGallery limit={6} />
           <div className="mt-10 text-center">
             <a
-              href="#create"
+              href="/templates"
               className="inline-flex items-center gap-2 rounded-full bg-[#1c1917] px-8 py-3 text-sm font-semibold text-[#e8d5a3] shadow-lg transition hover:bg-[#2a2438]"
             >
-              Fill form &amp; select template →
+              View all {TEMPLATES.length} templates →
             </a>
           </div>
         </div>
@@ -522,9 +522,6 @@ export default function Home() {
           <div className="mx-auto mt-10 max-w-2xl border-t border-white/25 pt-6">
             <div className="flex flex-wrap justify-center gap-6 text-sm text-white/90 sm:gap-10">
               <span className="inline-flex items-center gap-1.5">
-                <span className="text-[#facc15]">✓</span> 100% Free Basic Templates
-              </span>
-              <span className="inline-flex items-center gap-1.5">
                 <span className="text-[#facc15]">♥</span> Used by 191,800+ People
               </span>
               <span className="inline-flex items-center gap-1.5">
@@ -566,7 +563,7 @@ export default function Home() {
                 </a>
               </li>
               <li>
-                <a href="#templates" className="inline-block py-1 hover:text-[#c4a35a]">
+                <a href="/templates" className="inline-block py-1 hover:text-[#c4a35a]">
                   Templates
                 </a>
               </li>

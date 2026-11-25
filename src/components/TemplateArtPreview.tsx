@@ -97,7 +97,7 @@ const TemplateArtPreview = forwardRef<HTMLDivElement, Props>(function TemplateAr
       const topPx = (cardH * L.headY) / 100 - ((2 * L.headGap - L.pitch) / 2) * (w / 100);
       const avail = cardH * L.maxY - topPx;
       const need = body.scrollHeight; // layout height (unaffected by transform)
-      const next = need > avail && need > 0 && avail > 0 ? Math.max(0.4, avail / need) : 1;
+      const next = need > avail && need > 0 && avail > 0 ? Math.max(0.55, avail / need) : 1;
       setScale((prev) => (Math.abs(prev - next) < 0.005 ? prev : next));
     };
     recalc();
@@ -146,22 +146,42 @@ const TemplateArtPreview = forwardRef<HTMLDivElement, Props>(function TemplateAr
             heading
           )}
         </div>
-        {filled.map(([label, value]) => (
-          <div
-            key={label}
-            style={{
-              display: "grid",
-              gridTemplateColumns: `${L.labelW}cqw 1.5cqw minmax(0,1fr)`,
-              fontSize: `${L.rowFont}cqw`,
-              lineHeight: `${L.pitch}cqw`,
-              color: c.text,
-            }}
-          >
-            <span style={{ color: c.label, whiteSpace: "nowrap", fontWeight: L.labelBold ? 700 : undefined }}>{label}</span>
-            <span>{L.colon === false ? "" : ":"}</span>
-            <span style={{ overflowWrap: "anywhere" }}>{value}</span>
-          </div>
-        ))}
+        {filled.map(([label, value]) => {
+          const text = String(value);
+          // Long text (About Me, Address ...): label on its own line, paragraph uses the full text width
+          const isLong = text.length > 38 || text.includes("\n");
+          return isLong ? (
+            <div
+              key={label}
+              style={{
+                fontSize: `${L.rowFont}cqw`,
+                lineHeight: `${L.pitch}cqw`,
+                color: c.text,
+              }}
+            >
+              <div style={{ color: c.label, fontWeight: L.labelBold ? 700 : undefined }}>
+                {label}
+                {L.colon === false ? "" : " :"}
+              </div>
+              <div style={{ overflowWrap: "anywhere", whiteSpace: "pre-line", textAlign: "justify" }}>{text}</div>
+            </div>
+          ) : (
+            <div
+              key={label}
+              style={{
+                display: "grid",
+                gridTemplateColumns: `${L.labelW}cqw 1.5cqw minmax(0,1fr)`,
+                fontSize: `${L.rowFont}cqw`,
+                lineHeight: `${L.pitch}cqw`,
+                color: c.text,
+              }}
+            >
+              <span style={{ color: c.label, whiteSpace: "nowrap", fontWeight: L.labelBold ? 700 : undefined }}>{label}</span>
+              <span>{L.colon === false ? "" : ":"}</span>
+              <span style={{ overflowWrap: "anywhere" }}>{value}</span>
+            </div>
+          );
+        })}
       </div>
     );
   };

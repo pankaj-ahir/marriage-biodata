@@ -1,10 +1,10 @@
 import Link from "next/link";
 
 const NAV = [
-  ["#create", "Create"],
-  ["#templates", "Templates"],
-  ["#how-to", "How it works"],
-  ["#faq", "FAQ"],
+  ["/#create", "Create"],
+  ["/templates", "Templates"],
+  ["/#how-to", "How it works"],
+  ["/#faq", "FAQ"],
 ] as const;
 
 export default function Header() {
@@ -42,7 +42,7 @@ export default function Header() {
         </nav>
 
         <a
-          href="#create"
+          href="/#create"
           className="shrink-0 rounded-full bg-[#1c1917] px-4 py-2 text-xs font-semibold text-[#e8d5a3] shadow-sm transition hover:bg-[#0c0a09] sm:px-5 sm:text-sm"
         >
           Create

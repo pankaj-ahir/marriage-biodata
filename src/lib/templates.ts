@@ -207,7 +207,7 @@ function layoutFromRow(r: GeneratedRow): ArtLayout {
   const availH = (y1 - y0) * PAGE_H_PER_W;
   const hasMantra = !!CATEGORY_MANTRA[cat as TemplateCategory];
 
-  const rowFont = clamp(innerW * 0.029, 1.9, 2.45);
+  const rowFont = clamp(innerW * 0.034, 2.2, 2.8);
   const pitch = rowFont * 1.47;
   const titleFont = clamp(innerW * 0.045, 2.6, 3.6);
   const squeeze = Math.min(1, availH / 100); // very short areas -> tighter header
@@ -223,7 +223,7 @@ function layoutFromRow(r: GeneratedRow): ArtLayout {
   return {
     bg: `/templates/art/${id}.webp`,
     left,
-    labelW: clamp((photoLeft - left - 2) * 0.36, 14, 27),
+    labelW: clamp((photoLeft - left - 2) * 0.4, 16, 29),
     rowFont,
     maxY: (y1 - 0.6) / 100,
     pitch,
