@@ -24,8 +24,8 @@ const LANGS = [
 ] as const;
 
 
-/** Optional chips — same as freebiodatamaker.com */
-const OPTIONAL_CHIPS = [
+/** Optional "Add more details" chips, one set per step */
+const PERSONAL_CHIPS = [
   { key: "maritalStatus", label: "Marital Status" },
   { key: "rashi", label: "Rashi" },
   { key: "nakshatra", label: "Nakshatra" },
@@ -42,16 +42,40 @@ const OPTIONAL_CHIPS = [
   { key: "expectations", label: "Expectations" },
 ] as const;
 
+const FAMILY_CHIPS = [
+  { key: "familyType", label: "Family Type" },
+  { key: "familyStatus", label: "Family Status" },
+  { key: "familyValues", label: "Family Values" },
+  { key: "grandfatherName", label: "Grandfather's Name" },
+  { key: "maternalUncle", label: "Maternal Uncle" },
+  { key: "familyIncome", label: "Family Income" },
+] as const;
+
+const CONTACT_CHIPS = [
+  { key: "alternatePhone", label: "Alternate Mobile Number" },
+  { key: "whatsapp", label: "WhatsApp Number" },
+  { key: "contactPerson", label: "Contact Person" },
+] as const;
+
+type ChipDef = { readonly key: string; readonly label: string };
+const CHIPS: Record<"personal" | "family" | "contact", readonly ChipDef[]> = {
+  personal: PERSONAL_CHIPS,
+  family: FAMILY_CHIPS,
+  contact: CONTACT_CHIPS,
+};
+const ALL_CHIPS: readonly ChipDef[] = [...PERSONAL_CHIPS, ...FAMILY_CHIPS, ...CONTACT_CHIPS];
+
 const fieldClass =
   "w-full min-h-[44px] max-w-full rounded-xl border border-[#e8e0d4] bg-white px-3 py-2.5 text-base text-[#1c1917] shadow-[0_1px_2px_rgba(28,25,23,0.04)] outline-none transition placeholder:text-[#78716c] focus:border-[#c4a35a] focus:shadow-[0_0_0_3px_rgba(196,163,90,0.18)] sm:min-h-[42px] sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm touch-manipulation appearance-none";
 
 
 /** Allowed characters per field. Letters = any script (Gujarati, Hindi ...), so names never break. */
-const DIGIT_KEYS = new Set(["phone", "whatsapp"]);
+const DIGIT_KEYS = new Set(["phone", "whatsapp", "alternatePhone"]);
 const LETTER_KEYS = new Set([
   "fullName", "fatherName", "motherName", "fatherOccupation", "motherOccupation", "occupation",
   "religion", "caste", "gotra", "rashi", "nakshatra", "manglik", "gana", "diet", "complexion",
   "maritalStatus", "disability", "nativePlace", "nativePlaceExtra",
+  "grandfatherName", "maternalUncle", "contactPerson",
 ]);
 function sanitizeValue(key: string, v: string): string {
   if (DIGIT_KEYS.has(key)) return v.replace(/[^0-9+\s-]/g, "").slice(0, 16);
@@ -800,7 +824,7 @@ export default function BiodataForm() {
     const row: FormFieldRow = {
       id: makeId(),
       key,
-      label: preset ? fieldLabel(lang, preset.key) || preset.label : t(lang, "newField"),
+      label: preset ? (fieldLabel(lang, preset.key) !== preset.key ? fieldLabel(lang, preset.key) : preset.label) : t(lang, "newField"),
       value: "",
       include: true,
       section,
@@ -820,8 +844,8 @@ export default function BiodataForm() {
     setFieldsForStep(section, [...getFields(section), row]);
   };
 
-  const addChip = (chip: (typeof OPTIONAL_CHIPS)[number]) => {
-    addField("personal", { key: chip.key, label: chip.label });
+  const addChip = (section: FormFieldRow["section"], chip: ChipDef) => {
+    addField(section, { key: chip.key, label: chip.label });
   };
 
   const buildDataFromFields = useCallback((): BiodataFormData => {
@@ -977,7 +1001,8 @@ export default function BiodataForm() {
     step === 0 ? "personal" : step === 1 ? "family" : "contact";
   const currentFields = getFields(currentSection);
 
-  const usedChipKeys = new Set(personalFields.map((f) => f.key));
+  const usedChipKeys = new Set(currentFields.map((f) => f.key));
+  const chipText = (c: ChipDef) => (fieldLabel(lang, c.key) !== c.key ? fieldLabel(lang, c.key) : c.label);
   const removedDefaults = (() => {
     const defaults =
       currentSection === "personal" ? defaultPersonalFields() : currentSection === "family" ? defaultFamilyFields() : defaultContactFields();
@@ -1195,7 +1220,7 @@ export default function BiodataForm() {
                       onMove={(id, dir) => onFieldMove(currentSection, id, dir)}
                       onRemove={
                         f.key.startsWith("custom-") ||
-                        OPTIONAL_CHIPS.some((c) => c.key === f.key) ||
+                        ALL_CHIPS.some((c) => c.key === f.key) ||
                         !["fullName", "phone"].includes(f.key)
                           ? (id) => onFieldRemove(currentSection, id)
                           : undefined
@@ -1214,7 +1239,7 @@ export default function BiodataForm() {
               </div>
 
               {/* Removed default fields can always be brought back; optional chips only on personal step */}
-              {(removedDefaults.length > 0 || step === 0) && (
+              {(removedDefaults.length > 0 || CHIPS[currentSection].length > 0) && (
                 <div className="mt-5 rounded-xl border border-[#e7e5e4] bg-[#faf6eb]/30 p-4">
                   <p className="mb-3 text-sm font-medium text-stone-600">
                     {t(lang, "addMore")}
@@ -1230,15 +1255,14 @@ export default function BiodataForm() {
                         + {fieldLabel(lang, d.key) !== d.key ? fieldLabel(lang, d.key) : d.label}
                       </button>
                     ))}
-                    {step === 0 &&
-                      OPTIONAL_CHIPS.filter((chip) => !removedDefaults.some((d) => d.key === chip.key)).map((chip) => {
+                    {CHIPS[currentSection].filter((chip) => !removedDefaults.some((d) => d.key === chip.key)).map((chip) => {
                         const added = usedChipKeys.has(chip.key);
                         return (
                           <button
                             key={chip.key}
                             type="button"
                             disabled={added}
-                            onClick={() => addChip(chip)}
+                            onClick={() => addChip(currentSection, chip)}
                             className={cn(
                               "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
                               added
@@ -1246,7 +1270,7 @@ export default function BiodataForm() {
                                 : "border-[#c4a35a] bg-white text-[#7a5c14] hover:bg-[#faf6eb]"
                             )}
                           >
-                            + {fieldLabel(lang, chip.key)}
+                            + {chipText(chip)}
                           </button>
                         );
                       })}
