@@ -23,14 +23,14 @@ export default function ExtraPhotosPreview({ data }: { data: BiodataFormData }) 
   const m = layout?.page2 ?? { x: 22, top: 34, bottom: 34 }; // mm on A4 (210 x 297)
 
   const pages: string[][] = [];
-  for (let i = 0; i < extra.length; i += 2) pages.push(extra.slice(i, i + 2));
+  for (let i = 0; i < extra.length; i += 1) pages.push(extra.slice(i, i + 1)); // one photo per page
 
   return (
     <>
       {pages.map((pagePhotos, pageIdx) => (
         <div key={pageIdx} className="mx-auto mt-6 w-full max-w-[480px]">
           <p className="mb-2 text-center text-xs font-semibold tracking-wide text-stone-500">
-            PAGE {pageIdx + 2} — {pageIdx === 0 ? "PROFILE PHOTOS" : "MORE PHOTOS"}
+            PAGE {pageIdx + 2} — {pageIdx === 0 && mainOnPage2 ? "MAIN PHOTO" : `PHOTO ${pageIdx + (mainOnPage2 ? 1 : 2)}`}
           </p>
           <div
             className="grid overflow-hidden border border-stone-200 bg-white shadow-xl"

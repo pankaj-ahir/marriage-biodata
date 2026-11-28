@@ -178,8 +178,9 @@ export async function captureElementToPdf(
   pdf.addImage(imgData, "JPEG", (PAGE_W - w) / 2, 0, w, h, undefined, "FAST");
 
   // Additional profile photos are placed on a fresh A4 page, split into two equal halves.
-  for (let pageStart = 0; pageStart < extraPhotos.length; pageStart += 2) {
-    const pagePhotos = extraPhotos.slice(pageStart, pageStart + 2);
+  for (let pageStart = 0; pageStart < extraPhotos.length; pageStart += 1) {
+    // every photo gets its own page
+    const pagePhotos = extraPhotos.slice(pageStart, pageStart + 1);
     pdf.addPage();
 
     // Same template on page 2: paint the template artwork as the page background
