@@ -135,6 +135,8 @@ const RedGoldTemplatePreview = forwardRef<HTMLDivElement, Props>(function RedGol
     <div
       ref={setRefs}
       data-biodata-preview
+      data-main-photo-page2={photos[0] ? "1" : undefined}
+      data-extra-photo-0={photos[0] || ""}
       data-extra-photo-1={photos[1] || ""}
       data-extra-photo-2={photos[2] || ""}
       data-page-bg={BG}
@@ -197,6 +199,7 @@ const RedGoldTemplatePreview = forwardRef<HTMLDivElement, Props>(function RedGol
             top: "14.75%",
             width: "22.05cqw",
             height: "21.1cqw",
+            display: photos[0] ? "none" : undefined,
             overflow: "hidden",
             background: "rgba(60,10,20,.22)",
             boxSizing: "border-box",

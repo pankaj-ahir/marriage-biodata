@@ -1073,58 +1073,6 @@ export default function BiodataForm() {
                   </p>
                 )}
 
-                {/* Title + God + Mantra — aligned row */}
-                <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-[1fr_auto_1fr]">
-                  <div>
-                    <label htmlFor="biodata-title" className="mb-1.5 block text-xs font-semibold text-stone-600">{t(lang, "title")}</label>
-                    <input
-                      id="biodata-title"
-                      className={fieldClass}
-                      value={data.biodataTitle || ""}
-                      onChange={(e) => update("biodataTitle", e.target.value)}
-                      placeholder="Biodata"
-                    />
-                  </div>
-                  <div className="mx-auto flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-[#c4a35a] bg-[#faf6eb]/50 px-5 py-2.5">
-                    <button
-                      type="button"
-                      onClick={() => setShowGodModal(true)}
-                      disabled={!isGodVisible(data)}
-                      className={cn(
-                        "flex flex-col items-center gap-1 transition",
-                        isGodVisible(data) ? "hover:opacity-80" : "cursor-not-allowed opacity-40"
-                      )}
-                    >
-                      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#f0ebe3] to-[#f0ebe3]/30 ring-2 ring-[#f0ebe3]">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={resolveGodSrc(data.godImage)} alt="" className="h-9 w-9 object-contain" draggable={false} />
-                      </span>
-                      <span className="text-xs font-semibold text-[#7a5c14] underline">
-                        {t(lang, "changeGod")}
-                      </span>
-                    </button>
-                    <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-[#7a5c14] touch-manipulation sm:text-xs">
-                      <input
-                        type="checkbox"
-                        checked={isGodVisible(data)}
-                        onChange={(e) => update("showGodImage", e.target.checked)}
-                        className="h-5 w-5 rounded border-[#c4a35a] accent-[#7a5c14] focus:ring-[#c4a35a]"
-                      />
-                      <span>{t(lang, "include")}</span>
-                    </label>
-                  </div>
-                  <div>
-                    <label htmlFor="biodata-mantra" className="mb-1.5 block text-xs font-semibold text-stone-600">{t(lang, "mantra")}</label>
-                    <input
-                      id="biodata-mantra"
-                      className={fieldClass}
-                      value={data.mantra || ""}
-                      onChange={(e) => update("mantra", e.target.value)}
-                      placeholder="|| Shri Ganeshaya Namah ||"
-                    />
-                  </div>
-                </div>
-
                 {/* Profile photos — up to 3 */}
                 <div className="rounded-xl border border-dashed border-[#c4a35a]/70 bg-gradient-to-br from-[#f0ebe3]/30/80 to-stone-50 p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
@@ -1184,6 +1132,60 @@ export default function BiodataForm() {
                         <li>{t(lang, "tip5")}</li>
                       </ul>
                     </div>
+                  </div>
+                </div>
+
+                {/* Title, Mantra, then God photo */}
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <label htmlFor="biodata-title" className="mb-1.5 block text-xs font-semibold text-stone-600">{t(lang, "title")}</label>
+                    <input
+                      id="biodata-title"
+                      className={fieldClass}
+                      value={data.biodataTitle || ""}
+                      onChange={(e) => update("biodataTitle", e.target.value)}
+                      placeholder="Biodata"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="biodata-mantra" className="mb-1.5 block text-xs font-semibold text-stone-600">{t(lang, "mantra")}</label>
+                    <input
+                      id="biodata-mantra"
+                      className={fieldClass}
+                      value={data.mantra || ""}
+                      onChange={(e) => update("mantra", e.target.value)}
+                      placeholder="|| Shri Ganeshaya Namah ||"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-center">
+                  <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-[#c4a35a] bg-[#faf6eb]/50 px-5 py-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowGodModal(true)}
+                      disabled={!isGodVisible(data)}
+                      className={cn(
+                        "flex flex-col items-center gap-1 transition",
+                        isGodVisible(data) ? "hover:opacity-80" : "cursor-not-allowed opacity-40"
+                      )}
+                    >
+                      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#f0ebe3] to-[#f0ebe3]/30 ring-2 ring-[#f0ebe3]">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={resolveGodSrc(data.godImage)} alt="" className="h-9 w-9 object-contain" draggable={false} />
+                      </span>
+                      <span className="text-xs font-semibold text-[#7a5c14] underline">
+                        {t(lang, "changeGod")}
+                      </span>
+                    </button>
+                    <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-[#7a5c14] touch-manipulation sm:text-xs">
+                      <input
+                        type="checkbox"
+                        checked={isGodVisible(data)}
+                        onChange={(e) => update("showGodImage", e.target.checked)}
+                        className="h-5 w-5 rounded border-[#c4a35a] accent-[#7a5c14] focus:ring-[#c4a35a]"
+                      />
+                      <span>{t(lang, "include")}</span>
+                    </label>
                   </div>
                 </div>
               </div>

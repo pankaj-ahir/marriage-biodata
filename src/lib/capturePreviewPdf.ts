@@ -102,10 +102,14 @@ export async function captureElementToPdf(
     /* ignore */
   }
 
+  // Photo pages: when the template says so, the MAIN photo is not on page 1 but on page 2,
+  // followed by the other photos (2 photos per page).
+  const mainOnPage2 = element.getAttribute("data-main-photo-page2") === "1";
   const extraPhotos = [
+    mainOnPage2 ? element.getAttribute("data-extra-photo-0") || "" : "",
     element.getAttribute("data-extra-photo-1") || "",
     element.getAttribute("data-extra-photo-2") || "",
-  ].filter(Boolean).slice(0, 2);
+  ].filter(Boolean).slice(0, 3);
 
   const { host, node } = makeOffscreenClone(element);
   let canvas: HTMLCanvasElement;
@@ -174,7 +178,8 @@ export async function captureElementToPdf(
   pdf.addImage(imgData, "JPEG", (PAGE_W - w) / 2, 0, w, h, undefined, "FAST");
 
   // Additional profile photos are placed on a fresh A4 page, split into two equal halves.
-  if (extraPhotos.length) {
+  for (let pageStart = 0; pageStart < extraPhotos.length; pageStart += 2) {
+    const pagePhotos = extraPhotos.slice(pageStart, pageStart + 2);
     pdf.addPage();
 
     // Same template on page 2: paint the template artwork as the page background
@@ -215,7 +220,8 @@ export async function captureElementToPdf(
     // Each secondary photo gets the complete half-page area with no outer margin/gap.
     const margin = 0;
     const gap = 0;
-    const slotH = (PAGE_H - insetTop - insetBottom) / 2;
+    // one photo on the page -> it gets the whole page area, two photos -> two equal halves
+    const slotH = (PAGE_H - insetTop - insetBottom) / (pagePhotos.length === 1 ? 1 : 2);
 
     const loadPhoto = (src: string) => new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
@@ -224,9 +230,9 @@ export async function captureElementToPdf(
       img.src = src;
     });
 
-    for (let i = 0; i < extraPhotos.length; i++) {
+    for (let i = 0; i < pagePhotos.length; i++) {
       try {
-        const img = await loadPhoto(extraPhotos[i]);
+        const img = await loadPhoto(pagePhotos[i]);
         const boxX = insetX;
         const boxY = insetTop + i * slotH;
         const boxW = PAGE_W - insetX * 2;

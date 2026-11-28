@@ -107,7 +107,14 @@ const TemplateArtPreview = forwardRef<HTMLDivElement, Props>(function TemplateAr
     return () => ro?.disconnect();
   }, [data, L.headY, L.headGap, L.pitch, L.maxY]);
 
-  const colW = L.bodyW ?? L.photo.left - L.left - 2; // % width left for text beside the photo
+  // The main profile photo is printed on page 2 of the PDF, so page 1 has no photo frame
+  // and the text may use the width the photo used to take.
+  const photoOnPage2 = profilePhotos.length > 0;
+  const baseColW = L.bodyW ?? L.photo.left - L.left - 2; // % width left for text beside the photo
+  const colW =
+    photoOnPage2 && !L.photo.round
+      ? Math.max(baseColW, L.photo.left + L.photo.w - L.left)
+      : baseColW;
 
   const section = (heading: string, rows: Row[], first: boolean): ReactNode => {
     const filled = has(rows);
@@ -229,6 +236,8 @@ const TemplateArtPreview = forwardRef<HTMLDivElement, Props>(function TemplateAr
     <div
       ref={setRefs}
       data-biodata-preview
+      data-main-photo-page2={photoOnPage2 ? "1" : undefined}
+      data-extra-photo-0={profilePhotos[0] || ""}
       data-extra-photo-1={profilePhotos[1] || ""}
       data-extra-photo-2={profilePhotos[2] || ""}
       data-page-bg={L.bg}
@@ -344,6 +353,7 @@ const TemplateArtPreview = forwardRef<HTMLDivElement, Props>(function TemplateAr
             top: `${L.photo.top}%`,
             width: `${L.photo.w}cqw`,
             height: `${L.photo.h}cqw`,
+            display: photoOnPage2 ? "none" : undefined,
             border: L.photo.round ? "none" : `0.4cqw solid ${c.photoBorder}`,
             borderRadius: L.photo.round ? "50%" : "0.6cqw",
             overflow: "hidden",
